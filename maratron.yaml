@@ -1,0 +1,70 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: maratron
+  labels:
+    app: maratron
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: maratron
+    spec:
+      containers:
+      - name: maratron
+        image: gcr.io/내 프로젝트 id/maratron
+        imagePullPolicy: Always
+        env:
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: cloudsql
+                  key: username
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cloudsql
+                  key: password
+        ports:
+        - containerPort: 8080
+
+      - image: b.gcr.io/cloudsql-docker/gce-proxy:1.05
+        name: cloudsql-proxy
+        command: ["/cloud_sql_proxy", "--dir=/cloudsql",
+                  "-instances=내프로젝트 아이디:지역 예(asia-northeast1):sql인스턴스명=tcp:3306",
+                  "-credential_file=/secrets/cloudsql/credentials.json"]
+        volumeMounts:
+          - name: cloudsql-oauth-credentials
+            mountPath: /secrets/cloudsql
+            readOnly: true
+          - name: ssl-certs
+            mountPath: /etc/ssl/certs
+          - name: cloudsql
+            mountPath: /cloudsql
+      volumes:
+        - name: cloudsql-oauth-credentials
+          secret:
+            secretName: cloudsql-oauth-credentials
+        - name: ssl-certs
+          hostPath:
+            path: /etc/ssl/certs
+        - name: cloudsql
+          emptyDir:
+
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: maratron
+  labels:
+    app: maratron
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: maratron
